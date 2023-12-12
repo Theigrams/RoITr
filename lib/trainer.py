@@ -192,16 +192,17 @@ class Trainer(object):
             src_feats, tgt_feats = inputs["src_feats"].contiguous(), inputs["tgt_feats"].contiguous()
             src_raw_pcd = inputs["raw_src_pcd"].contiguous()
 
-            outputs = self.model.forward(
-                src_pcd, tgt_pcd, src_feats, tgt_feats, src_normals, tgt_normals, rot, trans, src_raw_pcd
-            )
+            with torch.cuda.amp.autocast():
+                outputs = self.model.forward(
+                    src_pcd, tgt_pcd, src_feats, tgt_feats, src_normals, tgt_normals, rot, trans, src_raw_pcd
+                )
 
-            stats = self.loss_func(outputs, inputs)
-            evaluator_stats = self.evaluator(outputs, inputs)
+                stats = self.loss_func(outputs, inputs)
+                evaluator_stats = self.evaluator(outputs, inputs)
 
-            stats.update(evaluator_stats)
+                stats.update(evaluator_stats)
 
-            loss = stats["loss"]
+                loss = stats["loss"]
             loss.backward()
 
         else:

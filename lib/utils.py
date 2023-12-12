@@ -478,7 +478,7 @@ def point_to_node_partition(
     matching_masks = torch.zeros_like(sq_dist_mat, dtype=torch.bool)  # (M, N)
     point_indices = torch.arange(points.shape[0]).cuda()  # (N,)
     matching_masks[point_to_node, point_indices] = True  # (M, N)
-    sq_dist_mat.masked_fill_(~matching_masks, 1e12)  # (M, N)
+    sq_dist_mat.masked_fill_(~matching_masks, 65504)  # (M, N)
 
     node_knn_indices = sq_dist_mat.topk(k=point_limit, dim=1, largest=False)[1]  # (M, K)
     node_knn_node_indices = index_select(point_to_node, node_knn_indices, dim=0)  # (M, K)
@@ -623,7 +623,7 @@ def get_node_correspondences(
 
     # compute overlaps
     dist_mat = square_distance(ref_knn_points, src_knn_points)  # (B, K, K)
-    dist_mat.masked_fill_(~point_mask_mat, 1e12)
+    dist_mat.masked_fill_(~point_mask_mat, 65504)
     point_overlap_mat = torch.lt(dist_mat, pos_radius**2)  # (B, K, K)
     ref_overlap_counts = torch.count_nonzero(point_overlap_mat.sum(-1), dim=-1).float()  # (B,)
     src_overlap_counts = torch.count_nonzero(point_overlap_mat.sum(-2), dim=-1).float()  # (B,)

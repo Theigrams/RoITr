@@ -100,7 +100,7 @@ class CoarseMatchingLoss(nn.Module):
         feat_dists = torch.sqrt(square_distance(tgt_feats[None, ::], src_feats[None, ::])[0])
 
         # print(tgt_feats)
-        overlaps = torch.zeros_like(feat_dists)
+        overlaps = torch.zeros_like(feat_dists, dtype=gt_node_corr_overlaps.dtype)
         overlaps[gt_tgt_node_corr_indices, gt_src_node_corr_indices] = gt_node_corr_overlaps
 
         pos_masks = torch.gt(overlaps, self.positive_overlap)
