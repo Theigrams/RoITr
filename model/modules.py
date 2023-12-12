@@ -1,21 +1,24 @@
 # Reference: https://github.com/qinzheng93/GeoTransformer
 
+from typing import Optional
+
+import numpy as np
 import torch
 from torch import nn
-from typing import Optional
+
 from lib.utils import square_distance
-import numpy as np
 
 
 class LearnableLogOptimalTransport(nn.Module):
-    '''
+    """
     Optimal Transport Layer with learnable thresholds
     Reference: GeoTransformer, Zheng Qin et al.
-    '''
+    """
+
     def __init__(self, num_iter, inf=1e6):
         super(LearnableLogOptimalTransport, self).__init__()
         self.num_iter = num_iter
-        self.register_parameter('alpha', torch.nn.Parameter(torch.tensor(1.)))
+        self.register_parameter("alpha", torch.nn.Parameter(torch.tensor(1.0)))
         self.inf = inf
 
     def log_sinkhorn_normalization(self, scores, log_mu, log_nu):
@@ -68,7 +71,7 @@ class LearnableLogOptimalTransport(nn.Module):
         return outputs
 
     def __repr__(self):
-        format_string = self.__class__.__name__ + '(num_iter={})'.format(self.num_iter)
+        format_string = self.__class__.__name__ + "(num_iter={})".format(self.num_iter)
         return format_string
 
 
@@ -221,7 +224,7 @@ class FineMatching(nn.Module):
         confidence_threshold: float = 0.05,
         use_dustbin: bool = False,
         use_global_score: bool = False,
-        correspondence_threshold: int = 3
+        correspondence_threshold: int = 3,
     ):
         r"""Point Matching.
         Args:
@@ -276,7 +279,6 @@ class FineMatching(nn.Module):
 
         return corr_mat
 
-
     def extract_correspondences(self, ref_knn_points, src_knn_points, score_mat, corr_mat):
         # extract dense correspondences
         batch_indices, ref_indices, src_indices = torch.nonzero(corr_mat, as_tuple=True)
@@ -324,16 +326,15 @@ class FineMatching(nn.Module):
         return ref_corr_points, src_corr_points, corr_scores
 
 
-
 class SinusoidalPositionalEmbedding(nn.Module):
     def __init__(self, d_model):
         super(SinusoidalPositionalEmbedding, self).__init__()
         if d_model % 2 != 0:
-            raise ValueError(f'Sinusoidal positional encoding with odd d_model: {d_model}')
+            raise ValueError(f"Sinusoidal positional encoding with odd d_model: {d_model}")
         self.d_model = d_model
         div_indices = torch.arange(0, d_model, 2).float()
         div_term = torch.exp(div_indices * (-np.log(10000.0) / d_model))
-        self.register_buffer('div_term', div_term)
+        self.register_buffer("div_term", div_term)
 
     def forward(self, emb_indices):
         r"""Sinusoidal Positional Embedding.
@@ -350,5 +351,3 @@ class SinusoidalPositionalEmbedding(nn.Module):
         embeddings = embeddings.view(*input_shape, self.d_model)  # (*, d_model)
         embeddings = embeddings.detach()
         return embeddings
-
-

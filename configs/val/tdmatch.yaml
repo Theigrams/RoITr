@@ -57,4 +57,3 @@ train:
   num_workers: 8
   ratio_drop: -1
   loss_type: Circle
-

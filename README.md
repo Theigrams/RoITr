@@ -42,32 +42,32 @@ Starting from the local level, we introduce an attention mechanism embedded with
 
 ### Pretrained model
    Pretrained model can be downloaded from [Google Drive](https://drive.google.com/file/d/1rlONbyisPZf0Ua0KzIxKG9qGAdUT2sUh/view?usp=sharing).
-   
-   Put the downloaded model under `./weights/`. 
-   
+
+   Put the downloaded model under `./weights/`.
+
 ### Prepare datasets
 
   Please follow [CoFiNet](https://github.com/haoyu94/Coarse-to-fine-correspondences) for preparing the 3DMatch data and put it under `./data/`.
-  
+
 ### Train
 
   ```
   python main.py configs/train/tdmatch.yaml
   ```
-  
+
 ### Test
 #### Original Benchmarks (default: 3DLoMatch)
   + Point correspondences are first extracted by running:
-  
+
   ```
   python main.py configs/test/tdmatch.yaml
   ```
-  
-  and stored on `snapshot/tdmatch_ripoint_transformer_test/3DLoMatch/`. 
-  
-  
+
+  and stored on `snapshot/tdmatch_ripoint_transformer_test/3DLoMatch/`.
+
+
   + To evaluate on 3DMatch, please change the `benchmark` keyword in `configs/test/tdmatch.yaml` from `3DLoMatch` to  `3DMatch`.
-  
+
   + The evaluation of extracted correspondences and relative poses estimated by RANSAC can be done by running:
 
   ```
@@ -80,18 +80,18 @@ Starting from the local level, we introduce an attention mechanism embedded with
   sh scripts/benchmark_registration_3dmatch_c2f.sh
   ```
   for 3DLoMatch and 3DMatch, respectively.
-  
-  + The final results are stored in `est_traj/3DMatch/{number of correspondences}/result`. 
+
+  + The final results are stored in `est_traj/3DMatch/{number of correspondences}/result`.
 
 #### Rotated Benchmarks (default: 3DLoMatch)
 
  + Change the keyword `rotated` in `configs/test/tdmatch.yaml` to `True`.
-   
+
  + Generate correspondences by running:
    ```
    python main.py configs/test/tdmatch.yaml
    ```
-  
+
  + Evaluation is done through:
 
    ```
@@ -104,37 +104,37 @@ Starting from the local level, we introduce an attention mechanism embedded with
    python registration/evaluate_registration_c2f_rotated.py --source_path snapshot/tdmatch_ripoint_transformer_test/3DLoMatch --benchmark 3DLoMatch --n_points 2500
    ```
 
- 
+
  ## 4DMatch
- 
+
 ### Pretrained model
 
  Pretrained model can be downloaded from [Google Drive](https://drive.google.com/file/d/1VQBkfh8R9WSkT5PiqTwqkxbNTvFhAaaj/view?usp=sharing).
-   
- Put the downloaded model under `./weights/`. 
+
+ Put the downloaded model under `./weights/`.
 
 ### Prepare datasets
 
  Please follow [Lepard](https://github.com/rabbityl/lepard) for preparing the 4DMatch data and put it under `./data/`.
- 
+
 ### Train
 
   ```
   python main.py configs/train/fdmatch.yaml
   ```
-  
+
 ### Test (default: 4DLoMatch)
   + Point correspondences are first extracted by running:
-  
+
   ```
   python main.py configs/test/fdmatch.yaml
   ```
-  
-  and stored on `snapshot/fdmatch_ripoint_transformer_test/4DLoMatch/`. 
-  
-  
+
+  and stored on `snapshot/fdmatch_ripoint_transformer_test/4DLoMatch/`.
+
+
   + To evaluate on 4DMatch, please change the `split` and `benchmark` keywords in `configs/test/fdmatch.yaml` to `split/4DMatch` and `4DMatch`, respectively.
-  
+
   + The evaluation of extracted correspondences can be done by running:
 
   ```
@@ -142,24 +142,24 @@ Starting from the local level, we introduce an attention mechanism embedded with
   ```
 
   The path in line 126 should list all the correspondence files, e.g., `./snapshot/fdmatch_ripoint_transformer_test/4DLoMatch/*.pth`.
-  
- 
+
+
  ## Reference
 
  + [GeoTransformer](https://github.com/qinzheng93/GeoTransformer).
- 
+
  + [Lepard](https://github.com/rabbityl/lepard).
- 
- + [CoFiNet](https://github.com/haoyu94/Coarse-to-fine-correspondences). 
- 
+
+ + [CoFiNet](https://github.com/haoyu94/Coarse-to-fine-correspondences).
+
  + [Point Transformer](https://github.com/POSTECH-CVLab/point-transformer).
 
  + [RIGA](https://arxiv.org/abs/2209.13252)
- 
+
  We thank the authors for their excellent works!
- 
+
  ## Citiation
- 
+
 If you find this repository helpful, please cite:
 
 ```
@@ -170,5 +170,3 @@ If you find this repository helpful, please cite:
   year={2023}
 }
 ```
-  
-

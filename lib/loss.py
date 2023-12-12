@@ -3,7 +3,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from lib.utils import square_distance
+
 
 def weighted_circle_loss(
     pos_masks,
@@ -86,19 +88,18 @@ class CoarseMatchingLoss(nn.Module):
         self.positive_overlap = cfg.coarse_loss_positive_overlap
 
     def forward(self, output_dict):
-        tgt_feats = output_dict['tgt_node_feats']
-        src_feats = output_dict['src_node_feats']
+        tgt_feats = output_dict["tgt_node_feats"]
+        src_feats = output_dict["src_node_feats"]
 
-        gt_node_corr_indices = output_dict['gt_node_corr_indices']
-        gt_node_corr_overlaps = output_dict['gt_node_corr_overlaps']
-
+        gt_node_corr_indices = output_dict["gt_node_corr_indices"]
+        gt_node_corr_overlaps = output_dict["gt_node_corr_overlaps"]
 
         gt_tgt_node_corr_indices = gt_node_corr_indices[:, 0]
         gt_src_node_corr_indices = gt_node_corr_indices[:, 1]
 
         feat_dists = torch.sqrt(square_distance(tgt_feats[None, ::], src_feats[None, ::])[0])
 
-        #print(tgt_feats)
+        # print(tgt_feats)
         overlaps = torch.zeros_like(feat_dists)
         overlaps[gt_tgt_node_corr_indices, gt_src_node_corr_indices] = gt_node_corr_overlaps
 
@@ -117,19 +118,19 @@ class FineMatchingLoss(nn.Module):
         self.positive_radius = cfg.fine_loss_positive_radius
 
     def forward(self, output_dict, data_dict):
-        tgt_node_corr_knn_points = output_dict['tgt_node_corr_knn_points']
-        src_node_corr_knn_points = output_dict['src_node_corr_knn_points']
-        tgt_node_corr_knn_masks = output_dict['tgt_node_corr_knn_masks']
-        src_node_corr_knn_masks = output_dict['src_node_corr_knn_masks']
-        matching_scores = output_dict['matching_scores']
-        rot = data_dict['rot'][0]
-        trans = data_dict['trans'][0]
-        #src_node_corr_knn_points = apply_transform(src_node_corr_knn_points, transform)
+        tgt_node_corr_knn_points = output_dict["tgt_node_corr_knn_points"]
+        src_node_corr_knn_points = output_dict["src_node_corr_knn_points"]
+        tgt_node_corr_knn_masks = output_dict["tgt_node_corr_knn_masks"]
+        src_node_corr_knn_masks = output_dict["src_node_corr_knn_masks"]
+        matching_scores = output_dict["matching_scores"]
+        rot = data_dict["rot"][0]
+        trans = data_dict["trans"][0]
+        # src_node_corr_knn_points = apply_transform(src_node_corr_knn_points, transform)
 
         src_node_corr_knn_points = torch.matmul(src_node_corr_knn_points, rot.T) + (trans.T)[None, ::]
         dists = square_distance(tgt_node_corr_knn_points, src_node_corr_knn_points)  # (B, N, M)
         gt_masks = torch.logical_and(tgt_node_corr_knn_masks.unsqueeze(2), src_node_corr_knn_masks.unsqueeze(1))
-        gt_corr_map = torch.lt(dists, self.positive_radius ** 2)
+        gt_corr_map = torch.lt(dists, self.positive_radius**2)
         gt_corr_map = torch.logical_and(gt_corr_map, gt_masks)
         slack_row_labels = torch.logical_and(torch.eq(gt_corr_map.sum(2), 0), tgt_node_corr_knn_masks)
         slack_col_labels = torch.logical_and(torch.eq(gt_corr_map.sum(1), 0), src_node_corr_knn_masks)
@@ -158,12 +159,7 @@ class OverallLoss(nn.Module):
 
         loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss
 
-        return {
-            'loss': loss,
-            'c_loss': coarse_loss,
-            'f_loss': fine_loss,
-            'o_loss': 0. * fine_loss
-        }
+        return {"loss": loss, "c_loss": coarse_loss, "f_loss": fine_loss, "o_loss": 0.0 * fine_loss}
 
 
 class Evaluator(nn.Module):
@@ -174,10 +170,10 @@ class Evaluator(nn.Module):
 
     @torch.no_grad()
     def evaluate_coarse(self, output_dict):
-        tgt_length_c = output_dict['tgt_nodes'].shape[0]
-        src_length_c = output_dict['src_nodes'].shape[0]
-        gt_node_corr_overlaps = output_dict['gt_node_corr_overlaps']
-        gt_node_corr_indices = output_dict['gt_node_corr_indices']
+        tgt_length_c = output_dict["tgt_nodes"].shape[0]
+        src_length_c = output_dict["src_nodes"].shape[0]
+        gt_node_corr_overlaps = output_dict["gt_node_corr_overlaps"]
+        gt_node_corr_indices = output_dict["gt_node_corr_indices"]
         masks = torch.gt(gt_node_corr_overlaps, self.acceptance_overlap)
         gt_node_corr_indices = gt_node_corr_indices[masks]
         gt_tgt_node_corr_indices = gt_node_corr_indices[:, 0]
@@ -185,8 +181,8 @@ class Evaluator(nn.Module):
         gt_node_corr_map = torch.zeros(tgt_length_c, src_length_c).cuda()
         gt_node_corr_map[gt_tgt_node_corr_indices, gt_src_node_corr_indices] = 1.0
 
-        tgt_node_corr_indices = output_dict['tgt_node_corr_indices']
-        src_node_corr_indices = output_dict['src_node_corr_indices']
+        tgt_node_corr_indices = output_dict["tgt_node_corr_indices"]
+        src_node_corr_indices = output_dict["src_node_corr_indices"]
 
         precision = gt_node_corr_map[tgt_node_corr_indices, src_node_corr_indices].mean()
 
@@ -194,11 +190,11 @@ class Evaluator(nn.Module):
 
     @torch.no_grad()
     def evaluate_fine(self, output_dict, data_dict):
-        rot, trans = data_dict['rot'][0], data_dict['trans'][0]
-        tgt_corr_points = output_dict['tgt_corr_points']
-        src_corr_points = output_dict['src_corr_points']
+        rot, trans = data_dict["rot"][0], data_dict["trans"][0]
+        tgt_corr_points = output_dict["tgt_corr_points"]
+        src_corr_points = output_dict["src_corr_points"]
         if src_corr_points.shape[0] == 0:
-            precision = 0.
+            precision = 0.0
         else:
             src_corr_points = torch.matmul(src_corr_points, rot.T) + trans.T
             corr_distances = torch.linalg.norm(tgt_corr_points - src_corr_points, dim=1)
@@ -208,7 +204,4 @@ class Evaluator(nn.Module):
     def forward(self, output_dict, data_dict):
         c_precision = self.evaluate_coarse(output_dict)
         f_precision = self.evaluate_fine(output_dict, data_dict)
-        return {
-            'PIR': c_precision,
-            'IR': f_precision
-        }
+        return {"PIR": c_precision, "IR": f_precision}

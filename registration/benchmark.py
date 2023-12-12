@@ -5,10 +5,15 @@ Author: Zan Gojcic, Shengyu Huang
 Last modified: 30.11.2020
 """
 
-import numpy as np
-import os, sys, glob, torch, math
+import glob
+import math
+import os
+import sys
 from collections import defaultdict
+
 import nibabel.quaternions as nq
+import numpy as np
+import torch
 
 
 def rotation_error(R1, R2):
@@ -32,7 +37,7 @@ def rotation_error(R1, R2):
 
     ae = torch.acos(e)
     pi = torch.Tensor([math.pi])
-    ae = 180. * ae / pi.to(ae.device).type(ae.dtype)
+    ae = 180.0 * ae / pi.to(ae.device).type(ae.dtype)
 
     return ae
 
@@ -93,10 +98,10 @@ def read_trajectory(filename, dim=4):
         lines = f.readlines()
 
         # Extract the point cloud pairs
-        keys = lines[0::(dim + 1)]
+        keys = lines[0 :: (dim + 1)]
         temp_keys = []
         for i in range(len(keys)):
-            temp_keys.append(keys[i].split('\t')[0:3])
+            temp_keys.append(keys[i].split("\t")[0:3])
 
         final_keys = []
         for i in range(len(temp_keys)):
@@ -105,7 +110,7 @@ def read_trajectory(filename, dim=4):
         traj = []
         for i in range(len(lines)):
             if i % 5 != 0:
-                traj.append(lines[i].split('\t')[0:dim])
+                traj.append(lines[i].split("\t")[0:dim])
 
         traj = np.asarray(traj, dtype=np.float).reshape(-1, dim, dim)
 
@@ -132,14 +137,15 @@ def read_trajectory_info(filename, dim=6):
     with open(filename) as fid:
         contents = fid.readlines()
     n_pairs = len(contents) // 7
-    assert (len(contents) == 7 * n_pairs)
+    assert len(contents) == 7 * n_pairs
     info_list = []
     n_frame = 0
 
     for i in range(n_pairs):
         frame_idx0, frame_idx1, n_frame = [int(item) for item in contents[i * 7].strip().split()]
         info_matrix = np.concatenate(
-            [np.fromstring(item, sep='\t').reshape(1, -1) for item in contents[i * 7 + 1:i * 7 + 7]], axis=0)
+            [np.fromstring(item, sep="\t").reshape(1, -1) for item in contents[i * 7 + 1 : i * 7 + 7]], axis=0
+        )
         info_list.append(info_matrix)
 
     cov_matrix = np.asarray(info_list, dtype=np.float).reshape(-1, dim, dim)
@@ -182,29 +188,29 @@ def write_trajectory(traj, metadata, filename, dim=4):
     dim (int): dimension of the transformation matrix (4x4 for 3D data)
     """
 
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         for idx in range(traj.shape[0]):
             # Only save the transfromation parameters for which the overlap threshold was satisfied
             if metadata[idx][2]:
                 p = traj[idx, :, :].tolist()
-                f.write('\t'.join(map(str, metadata[idx])) + '\n')
-                f.write('\n'.join('\t'.join(map('{0:.12f}'.format, p[i])) for i in range(dim)))
-                f.write('\n')
+                f.write("\t".join(map(str, metadata[idx])) + "\n")
+                f.write("\n".join("\t".join(map("{0:.12f}".format, p[i])) for i in range(dim)))
+                f.write("\n")
 
 
 def read_pairs(src_path, tgt_path, n_points):
     # get pointcloud
     src = torch.load(src_path)
     tgt = torch.load(tgt_path)
-    src_pcd, src_embedding = src['coords'], src['feats']
-    tgt_pcd, tgt_embedding = tgt['coords'], tgt['feats']
+    src_pcd, src_embedding = src["coords"], src["feats"]
+    tgt_pcd, tgt_embedding = tgt["coords"], tgt["feats"]
 
     # permute and randomly select 2048/1024 points
-    if (src_pcd.shape[0] > n_points):
+    if src_pcd.shape[0] > n_points:
         src_permute = np.random.permutation(src_pcd.shape[0])[:n_points]
     else:
         src_permute = np.random.choice(src_pcd.shape[0], n_points)
-    if (tgt_pcd.shape[0] > n_points):
+    if tgt_pcd.shape[0] > n_points:
         tgt_permute = np.random.permutation(tgt_pcd.shape[0])[:n_points]
     else:
         tgt_permute = np.random.choice(tgt_pcd.shape[0], n_points)
@@ -233,7 +239,7 @@ def evaluate_registration(num_fragment, result, result_pairs, gt_pairs, gt, gt_i
     recall (float): mean registration recall over the scene (deciding parameter for the performance of the algorithm)
     """
 
-    err2 = err2 ** 2
+    err2 = err2**2
     gt_mask = np.zeros((num_fragment, num_fragment), dtype=np.int)
     flags = []
 
@@ -282,8 +288,8 @@ def benchmark(est_folder, gt_folder):
     re_all, te_all, precision, recall = [], [], [], []
     n_valids = []
 
-    short_names = ['Kitchen', 'Home 1', 'Home 2', 'Hotel 1', 'Hotel 2', 'Hotel 3', 'Study', 'MIT Lab']
-    with open(f'{est_folder}/result', 'w') as f:
+    short_names = ["Kitchen", "Home 1", "Home 2", "Hotel 1", "Hotel 2", "Hotel 3", "Study", "MIT Lab"]
+    with open(f"{est_folder}/result", "w") as f:
         f.write(("Scene\t¦ prec.\t¦ rec.\t¦ re\t¦ te\t¦ samples\t¦\n"))
 
         for idx, scene in enumerate(scene_names):
@@ -298,27 +304,34 @@ def benchmark(est_folder, gt_folder):
             n_fragments, gt_traj_cov = read_trajectory_info(os.path.join(scene, "gt.info"))
 
             # estimated info
-            est_pairs, est_traj = read_trajectory(os.path.join(est_folder, scenes[idx], 'est.log'))
+            est_pairs, est_traj = read_trajectory(os.path.join(est_folder, scenes[idx], "est.log"))
 
-            temp_precision, temp_recall, c_flag = evaluate_registration(n_fragments, est_traj, est_pairs, gt_pairs,
-                                                                        gt_traj, gt_traj_cov)
+            temp_precision, temp_recall, c_flag = evaluate_registration(
+                n_fragments, est_traj, est_pairs, gt_pairs, gt_traj, gt_traj_cov
+            )
 
             # Filter out the estimated rotation matrices
             ext_gt_traj = extract_corresponding_trajectors(est_pairs, gt_pairs, gt_traj)
-            re = rotation_error(torch.from_numpy(ext_gt_traj[:, 0:3, 0:3]),
-                                torch.from_numpy(est_traj[:, 0:3, 0:3])).cpu().numpy()[np.array(c_flag) == 0]
-            te = translation_error(torch.from_numpy(ext_gt_traj[:, 0:3, 3:4]),
-                                   torch.from_numpy(est_traj[:, 0:3, 3:4])).cpu().numpy()[np.array(c_flag) == 0]
+            re = (
+                rotation_error(torch.from_numpy(ext_gt_traj[:, 0:3, 0:3]), torch.from_numpy(est_traj[:, 0:3, 0:3]))
+                .cpu()
+                .numpy()[np.array(c_flag) == 0]
+            )
+            te = (
+                translation_error(torch.from_numpy(ext_gt_traj[:, 0:3, 3:4]), torch.from_numpy(est_traj[:, 0:3, 3:4]))
+                .cpu()
+                .numpy()[np.array(c_flag) == 0]
+            )
 
-            re_per_scene['mean'].append(np.mean(re))
-            re_per_scene['median'].append(np.median(re))
-            re_per_scene['min'].append(np.min(re))
-            re_per_scene['max'].append(np.max(re))
+            re_per_scene["mean"].append(np.mean(re))
+            re_per_scene["median"].append(np.median(re))
+            re_per_scene["min"].append(np.min(re))
+            re_per_scene["max"].append(np.max(re))
 
-            te_per_scene['mean'].append(np.mean(te))
-            te_per_scene['median'].append(np.median(te))
-            te_per_scene['min'].append(np.min(te))
-            te_per_scene['max'].append(np.max(te))
+            te_per_scene["mean"].append(np.mean(te))
+            te_per_scene["median"].append(np.median(te))
+            te_per_scene["min"].append(np.min(te))
+            te_per_scene["max"].append(np.max(te))
 
             re_all.extend(re.reshape(-1).tolist())
             te_all.extend(te.reshape(-1).tolist())
@@ -326,18 +339,26 @@ def benchmark(est_folder, gt_folder):
             precision.append(temp_precision)
             recall.append(temp_recall)
 
-            f.write("{}\t¦ {:.3f}\t¦ {:.3f}\t¦ {:.3f}\t¦ {:.3f}\t¦ {:3d}¦\n".format(short_names[idx], temp_precision,
-                                                                                    temp_recall, np.median(re),
-                                                                                    np.median(te), n_valid))
-            np.save(f'{est_folder}/{scenes[idx]}/flag.npy', c_flag)
+            f.write(
+                "{}\t¦ {:.3f}\t¦ {:.3f}\t¦ {:.3f}\t¦ {:.3f}\t¦ {:3d}¦\n".format(
+                    short_names[idx], temp_precision, temp_recall, np.median(re), np.median(te), n_valid
+                )
+            )
+            np.save(f"{est_folder}/{scenes[idx]}/flag.npy", c_flag)
 
         weighted_precision = (np.array(n_valids) * np.array(precision)).sum() / np.sum(n_valids)
 
         f.write("Mean precision: {:.3f}: +- {:.3f}\n".format(np.mean(precision), np.std(precision)))
         f.write("Weighted precision: {:.3f}\n".format(weighted_precision))
 
-        f.write("Mean median RRE: {:.3f}: +- {:.3f}\n".format(np.mean(re_per_scene['median']),
-                                                              np.std(re_per_scene['median'])))
-        f.write("Mean median RTE: {:.3F}: +- {:.3f}\n".format(np.mean(te_per_scene['median']),
-                                                              np.std(te_per_scene['median'])))
+        f.write(
+            "Mean median RRE: {:.3f}: +- {:.3f}\n".format(
+                np.mean(re_per_scene["median"]), np.std(re_per_scene["median"])
+            )
+        )
+        f.write(
+            "Mean median RTE: {:.3F}: +- {:.3f}\n".format(
+                np.mean(te_per_scene["median"]), np.std(te_per_scene["median"])
+            )
+        )
     f.close()

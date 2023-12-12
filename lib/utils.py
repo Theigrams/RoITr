@@ -1,24 +1,29 @@
-import random, time, re
+import glob
+import os
+import random
+import re
+import time
+from typing import Optional
+
 import numpy as np
 import open3d as o3d
 import torch
 import torch.nn as nn
-from typing import Optional
+
 from cpp_wrappers.pointops.functions.pointops import knnquery
-import glob, os
 
 
 def read_entries(split, data_root, shuffle=False):
-    '''
+    """
     Read all the names of data files into a single list
     :param split: ['train', 'val', 'test']
     :param data_root: Directory of data
     :param shuffle: Whether to shuffle the resulted data list
     :return: Data list
-    '''
-    #print(os.path.join(data_root, split, "*/*.npz"))
+    """
+    # print(os.path.join(data_root, split, "*/*.npz"))
     entries = glob.glob(os.path.join(data_root, split, "*/*.npz"))
-    #print(entries)
+    # print(entries)
     if shuffle:
         random.shuffle(entries)
 
@@ -26,11 +31,11 @@ def read_entries(split, data_root, shuffle=False):
 
 
 def setup_seed(seed):
-    '''
+    """
     fix random seed for deterministic training
     :param seed: selected seed for deterministic training
     :return: None
-    '''
+    """
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
@@ -42,16 +47,16 @@ def natural_key(string_):
     """
     Sort strings by numbers in the name
     """
-    return [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', string_)]
+    return [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", string_)]
 
 
 def to_tsfm(rot, trans):
-    '''
+    """
     Transfer rotation and translation to transformation
     :param rot: rotation matrix of numpy.ndarray in shape [3, 3]
     :param trans: translation vector of numpy.ndarray in shape[3, 1]
     :return: Transformation matrix of numpy.ndarray in shape[4, 4]
-    '''
+    """
     tsfm = np.eye(4)
     tsfm[:3, :3] = rot
     tsfm[:3, 3] = trans.flatten()
@@ -59,18 +64,18 @@ def to_tsfm(rot, trans):
 
 
 def to_o3d_pcd(pcd):
-    '''
+    """
     Transfer a point cloud of numpy.ndarray to open3d point cloud
     :param pcd: point cloud of numpy.ndarray in shape[N, 3]
     :return: open3d.geometry.PointCloud()
-    '''
+    """
     pcd_ = o3d.geometry.PointCloud()
     pcd_.points = o3d.utility.Vector3dVector(pcd)
     return pcd_
 
 
 def get_correspondences(src_pcd, tgt_pcd, trans, search_voxel_size, K=None):
-    '''
+    """
     Get correspondences between a pair of point clouds, given the ground truth transformation
     :param src_pcd: source point cloud of open3d.geomerty.PointCloud in shape[N, 3]
     :param tgt_pcd: target point cloud of open3d.geomerty.PointCloud in shape[M, 3]
@@ -78,7 +83,7 @@ def get_correspondences(src_pcd, tgt_pcd, trans, search_voxel_size, K=None):
     :param search_voxel_size: distrance threshold within which two points are considered as a correspondence
     :param K: if K is not None, only return K corresponding points for each point
     :return: correspondences of torch.tensor in shape[?, 2]
-    '''
+    """
 
     src_pcd.transform(trans)
     pcd_tree = o3d.geometry.KDTreeFlann(tgt_pcd)
@@ -97,23 +102,25 @@ def get_correspondences(src_pcd, tgt_pcd, trans, search_voxel_size, K=None):
 
 
 def matching_descriptors(src_desc, tgt_desc, mutual=False, major=None):
-    '''
+    """
     Matching based on descriptors, return correspondences
     :param src_desc: descriptors of source point cloud
     :param tgt_desc: descriptors of target point cloud
     :param mutual: wheter to perform mutual selection
     :return: Extracted correspondences of numpy.ndarray in shape[n, 2]
-    '''
-    assert major in ['row', 'col'] or major is None
-    distances = square_distance(torch.from_numpy(src_desc[np.newaxis, :]), torch.from_numpy(tgt_desc[np.newaxis, :]))[0].numpy()
+    """
+    assert major in ["row", "col"] or major is None
+    distances = square_distance(torch.from_numpy(src_desc[np.newaxis, :]), torch.from_numpy(tgt_desc[np.newaxis, :]))[
+        0
+    ].numpy()
     row_idx = np.arange(src_desc.shape[0])
     row_major_idx = np.argmin(distances, axis=1)
     col_idx = np.arange(tgt_desc.shape[0])
     col_major_idx = np.argmin(distances, axis=0)
     if not mutual:
-        if major == 'row':
+        if major == "row":
             correspondence = np.concatenate((row_idx[:, np.newaxis], row_major_idx[:, np.newaxis]), axis=1)
-        elif major == 'col':
+        elif major == "col":
             correspondence = np.concatenate((col_major_idx[:, np.newaxis], col_idx[:, np.newaxis]), axis=1)
         else:
             row_major_mask = np.zeros_like(distances)
@@ -122,8 +129,9 @@ def matching_descriptors(src_desc, tgt_desc, mutual=False, major=None):
             col_major_mask[col_major_idx, col_idx] = 1
             mask = np.logical_or(row_major_mask > 0, col_major_mask > 0)
             correspondence = np.nonzero(mask)
-            correspondence = np.concatenate((correspondence[0][:, np.newaxis], correspondence[1][:, np.newaxis]),
-                                            axis=-1)
+            correspondence = np.concatenate(
+                (correspondence[0][:, np.newaxis], correspondence[1][:, np.newaxis]), axis=-1
+            )
         return correspondence
     else:
         row_major_mask = np.zeros_like(distances)
@@ -137,26 +145,26 @@ def matching_descriptors(src_desc, tgt_desc, mutual=False, major=None):
 
 
 def square_distance(src, tgt, normalized=False):
-    '''
+    """
     Calculate Euclidean distance between every two points, for batched point clouds in torch.tensor
     :param src: source point cloud in shape [B, N, 3]
     :param tgt: target point cloud in shape [B, M, 3]
     :return: Squared Euclidean distance matrix in torch.tensor of shape[B, N, M]
-    '''
+    """
     B, N, _ = src.shape
     _, M, _ = tgt.shape
     if normalized:
         dist = 2.0 - 2.0 * torch.matmul(src, tgt.permute(0, 2, 1).contiguous())
     else:
-        dist = -2. * torch.matmul(src, tgt.permute(0, 2, 1).contiguous())
-        dist += torch.sum(src ** 2, dim=-1).unsqueeze(-1)
-        dist += torch.sum(tgt ** 2, dim=-1).unsqueeze(-2)
+        dist = -2.0 * torch.matmul(src, tgt.permute(0, 2, 1).contiguous())
+        dist += torch.sum(src**2, dim=-1).unsqueeze(-1)
+        dist += torch.sum(tgt**2, dim=-1).unsqueeze(-2)
 
     dist = torch.clamp(dist, min=1e-12, max=None)
     return dist
 
 
-def weighted_procrustes(src_points, tgt_points, weights=None, weight_thresh=0., eps=1e-5, return_transform=False):
+def weighted_procrustes(src_points, tgt_points, weights=None, weight_thresh=0.0, eps=1e-5, return_transform=False):
     r"""
     Compute rigid transformation from `src_points` to `tgt_points` using weighted SVD.
 
@@ -219,7 +227,7 @@ def weighted_procrustes(src_points, tgt_points, weights=None, weight_thresh=0., 
 
 
 def sinkhorn(log_alpha, n_iters: int = 5, slack: bool = True, eps: float = -1) -> torch.Tensor:
-    """ Run sinkhorn iterations to generate a near doubly stochastic matrix, where each row or column sum to <=1
+    """Run sinkhorn iterations to generate a near doubly stochastic matrix, where each row or column sum to <=1
     Args:
         log_alpha: log of positive matrix to apply sinkhorn normalization (B, J, K)
         n_iters (int): Number of normalization iterations
@@ -242,16 +250,22 @@ def sinkhorn(log_alpha, n_iters: int = 5, slack: bool = True, eps: float = -1) -
 
         for i in range(n_iters):
             # Row normalization
-            log_alpha_padded = torch.cat((
+            log_alpha_padded = torch.cat(
+                (
                     log_alpha_padded[:, :-1, :] - (torch.logsumexp(log_alpha_padded[:, :-1, :], dim=2, keepdim=True)),
-                    log_alpha_padded[:, -1, None, :]),  # Don't normalize last row
-                dim=1)
+                    log_alpha_padded[:, -1, None, :],
+                ),  # Don't normalize last row
+                dim=1,
+            )
 
             # Column normalization
-            log_alpha_padded = torch.cat((
+            log_alpha_padded = torch.cat(
+                (
                     log_alpha_padded[:, :, :-1] - (torch.logsumexp(log_alpha_padded[:, :, :-1], dim=1, keepdim=True)),
-                    log_alpha_padded[:, :, -1, None]),  # Don't normalize last column
-                dim=2)
+                    log_alpha_padded[:, :, -1, None],
+                ),  # Don't normalize last column
+                dim=2,
+            )
 
             if eps > 0:
                 if prev_alpha is not None:
@@ -279,22 +293,21 @@ def sinkhorn(log_alpha, n_iters: int = 5, slack: bool = True, eps: float = -1) -
     return log_alpha
 
 
-
 def interpolate(weights, points):
-    '''
+    """
     Do interpolation based on provided weights
     :param weights: interpolation weights in torch.tensor of shape [b, n, m]
     :param points: points to be interpolated, in torch.tensor of shape [b, m, 3]
     :return: Interpolated coordinates in torch.tensor of shape[b, n, 3]
-    '''
-    weights = torch.unsqueeze(weights, dim=-1).expand(-1, -1, -1, 3) # [b, n, m] -> [b, n, m, 3]
-    points = torch.unsqueeze(points, dim=1).expand(-1, weights.shape[1], -1, -1) #[b, m, 3] -> [b, n, m, 3]
+    """
+    weights = torch.unsqueeze(weights, dim=-1).expand(-1, -1, -1, 3)  # [b, n, m] -> [b, n, m, 3]
+    points = torch.unsqueeze(points, dim=1).expand(-1, weights.shape[1], -1, -1)  # [b, m, 3] -> [b, n, m, 3]
     interpolation = torch.sum(weights * points, dim=-2)
     return interpolation
 
 
 def soft_assignment(src_xyz, src_feats, tgt_xyz, tgt_feats):
-    '''
+    """
     Differentiablely compute correspondences between points, return with weights.
     :param src_xyz: Torch tensor in shape[b, n, 3]
     :param src_feats: Torch tensor in shape[b, n, c]
@@ -304,24 +317,36 @@ def soft_assignment(src_xyz, src_feats, tgt_xyz, tgt_feats):
              src2tgt_interpolated_xyz: interpolated xyz coordinates in tgt space, torch.tensor in shape[b, n, 3]
              tgt2src_assignment_confidence: confidence of each corresponding point, torch.tensor in shape[b, n]
              tgt2src_interpolated_xyz: interpolated xyz coordinates in src space, torch.tensor in shape[b, n]
-    '''
+    """
     feat_distance = torch.sqrt(square_distance(src_feats, tgt_feats))
-    feat_similarity = 1. / (1e-8 + feat_distance) #similarity matrix in shape [b, n, n]
+    feat_similarity = 1.0 / (1e-8 + feat_distance)  # similarity matrix in shape [b, n, n]
     # calculate src's corresponding weights and confidence in tgt
-    src2tgt_assignment_weights = feat_similarity / torch.sum(feat_similarity, dim=-1, keepdim=True) #row-normalized similarity matrix in shape [b, n, n]
-    src2tgt_assignment_max_sim = torch.max(feat_similarity, dim=-1)[0] #row-major max similarity in shape [b, n]
-    src2tgt_assignment_confidence = src2tgt_assignment_max_sim / torch.sum(src2tgt_assignment_max_sim, dim=-1, keepdim=True) #normalized confidence of softassignment in shape [b, n]
+    src2tgt_assignment_weights = feat_similarity / torch.sum(
+        feat_similarity, dim=-1, keepdim=True
+    )  # row-normalized similarity matrix in shape [b, n, n]
+    src2tgt_assignment_max_sim = torch.max(feat_similarity, dim=-1)[0]  # row-major max similarity in shape [b, n]
+    src2tgt_assignment_confidence = src2tgt_assignment_max_sim / torch.sum(
+        src2tgt_assignment_max_sim, dim=-1, keepdim=True
+    )  # normalized confidence of softassignment in shape [b, n]
     src2tgt_interpolated_xyz = interpolate(src2tgt_assignment_weights, tgt_xyz)
     # calculate tgt's corresponding weights and confidence in src
-    tgt2src_assignment_weights = feat_similarity / torch.sum(feat_similarity, dim=1, keepdim=True)  # column-normalized similarity matrix in shape [b, n, n]
+    tgt2src_assignment_weights = feat_similarity / torch.sum(
+        feat_similarity, dim=1, keepdim=True
+    )  # column-normalized similarity matrix in shape [b, n, n]
     tgt2src_assignment_max_sim = torch.max(feat_similarity, dim=1)[0]  # row-major max similarity in shape [b, n]
-    tgt2src_assignment_confidence = tgt2src_assignment_max_sim / torch.sum(tgt2src_assignment_max_sim, dim=-1, keepdim=True)  # normalized confidence of softassignment in shape [b, n]
+    tgt2src_assignment_confidence = tgt2src_assignment_max_sim / torch.sum(
+        tgt2src_assignment_max_sim, dim=-1, keepdim=True
+    )  # normalized confidence of softassignment in shape [b, n]
     tgt2src_interpolated_xyz = interpolate(tgt2src_assignment_weights, src_xyz)
-    return src2tgt_assignment_confidence, src2tgt_interpolated_xyz, tgt2src_assignment_confidence, tgt2src_interpolated_xyz
+    return (
+        src2tgt_assignment_confidence,
+        src2tgt_interpolated_xyz,
+        tgt2src_assignment_confidence,
+        tgt2src_interpolated_xyz,
+    )
 
 
 def get_geometric_structure_embeddings(points, angle_k=3):
-
     batch_size, num_point, _ = points.shape
 
     dist_map = torch.sqrt(square_distance(points, points))  # (B, N, N)
@@ -343,60 +368,59 @@ def get_geometric_structure_embeddings(points, angle_k=3):
 
 
 def k_nearest_neighbors(query, ref, k):
-    '''
+    """
     Get k nearest neighbors
     query: query points in shape [N, c]
     ref: ref points in shape[M, c]
     k: number of nearest neighbors
-    '''
+    """
     dist = square_distance(query[None, ::], ref[None, ::])
-    _, knn_ids = torch.topk(dist, largest=False, dim=-1, sorted=True) #[N, k]
+    _, knn_ids = torch.topk(dist, largest=False, dim=-1, sorted=True)  # [N, k]
     return knn_ids
 
 
-
 def calc_ppf_gpu(points, point_normals, patches, patch_normals):
-    '''
+    """
     Calculate ppf gpu
     points: [n, 3]
     point_normals: [n, 3]
     patches: [n, nsamples, 3]
     patch_normals: [n, nsamples, 3]
-    '''
+    """
     points = torch.unsqueeze(points, dim=1).expand(-1, patches.shape[1], -1)
     point_normals = torch.unsqueeze(point_normals, dim=1).expand(-1, patches.shape[1], -1)
-    vec_d = patches - points #[n, n_samples, 3]
-    d = torch.sqrt(torch.sum(vec_d ** 2, dim=-1, keepdim=True)) #[n, n_samples, 1]
+    vec_d = patches - points  # [n, n_samples, 3]
+    d = torch.sqrt(torch.sum(vec_d**2, dim=-1, keepdim=True))  # [n, n_samples, 1]
     # angle(n1, vec_d)
     y = torch.sum(point_normals * vec_d, dim=-1, keepdim=True)
     x = torch.cross(point_normals, vec_d, dim=-1)
-    x = torch.sqrt(torch.sum(x ** 2, dim=-1, keepdim=True))
+    x = torch.sqrt(torch.sum(x**2, dim=-1, keepdim=True))
     angle1 = torch.atan2(x, y) / np.pi
 
     # angle(n2, vec_d)
     y = torch.sum(patch_normals * vec_d, dim=-1, keepdim=True)
     x = torch.cross(patch_normals, vec_d, dim=-1)
-    x = torch.sqrt(torch.sum(x ** 2, dim=-1, keepdim=True))
+    x = torch.sqrt(torch.sum(x**2, dim=-1, keepdim=True))
     angle2 = torch.atan2(x, y) / np.pi
 
     # angle(n1, n2)
     y = torch.sum(point_normals * patch_normals, dim=-1, keepdim=True)
     x = torch.cross(point_normals, patch_normals, dim=-1)
-    x = torch.sqrt(torch.sum(x ** 2, dim=-1, keepdim=True))
+    x = torch.sqrt(torch.sum(x**2, dim=-1, keepdim=True))
     angle3 = torch.atan2(x, y) / np.pi
 
-    ppf = torch.cat([d, angle1, angle2, angle3], dim=-1) #[n, samples, 4]
+    ppf = torch.cat([d, angle1, angle2, angle3], dim=-1)  # [n, samples, 4]
     return ppf
 
 
 def group_all(feats):
-    '''
+    """
     all-to-all grouping
     feats: [n, c]
     out: grouped feat: [n, n, c]
-    '''
+    """
     grouped_feat = torch.unsqueeze(feats, dim=0)
-    grouped_feat = grouped_feat.expand(feats.shape[0], -1, -1) #[n, n, c]
+    grouped_feat = grouped_feat.expand(feats.shape[0], -1, -1)  # [n, n, c]
     return grouped_feat
 
 
@@ -472,17 +496,17 @@ def point_to_node_partition(
 
 
 def get_node_occlusion_score(
-        ref_knn_point_ids: torch.Tensor,
-        src_knn_point_ids: torch.Tensor,
-        ref_points: torch.Tensor,
-        src_points: torch.Tensor,
-        rot: torch.Tensor,
-        trans: torch.Tensor,
-        ref_masks: Optional[torch.Tensor] = None,
-        src_masks: Optional[torch.Tensor] = None,
-        ref_knn_masks: Optional[torch.Tensor] = None,
-        src_knn_masks: Optional[torch.Tensor] = None,
-        overlap_thres: Optional[float] = 0.0375,
+    ref_knn_point_ids: torch.Tensor,
+    src_knn_point_ids: torch.Tensor,
+    ref_points: torch.Tensor,
+    src_points: torch.Tensor,
+    rot: torch.Tensor,
+    trans: torch.Tensor,
+    ref_masks: Optional[torch.Tensor] = None,
+    src_masks: Optional[torch.Tensor] = None,
+    ref_knn_masks: Optional[torch.Tensor] = None,
+    src_knn_masks: Optional[torch.Tensor] = None,
+    overlap_thres: Optional[float] = 0.0375,
 ):
     r"""
     Compute the occlusion scores for each node. Scores are in range of [0, 1], 0 for completely occluded,
@@ -503,13 +527,16 @@ def get_node_occlusion_score(
         src_overlap_score: torch.Tensor (N,)
     """
     src_points = torch.matmul(src_points, rot.T) + trans.T
-    ref_o, src_o = torch.from_numpy(np.array([ref_points.shape[0]])).to(ref_points).int(), torch.from_numpy(np.array([src_points.shape[0]])).to(src_points).int()
+    ref_o, src_o = (
+        torch.from_numpy(np.array([ref_points.shape[0]])).to(ref_points).int(),
+        torch.from_numpy(np.array([src_points.shape[0]])).to(src_points).int(),
+    )
 
     _, ref_dist = knnquery(1, src_points, ref_points, src_o, ref_o)
     _, src_dist = knnquery(1, ref_points, src_points, ref_o, src_o)
 
-    ref_overlap = torch.lt(ref_dist, overlap_thres).float().squeeze(1) #(M, )
-    src_overlap = torch.lt(src_dist, overlap_thres).float().squeeze(1) #(N, )
+    ref_overlap = torch.lt(ref_dist, overlap_thres).float().squeeze(1)  # (M, )
+    src_overlap = torch.lt(src_dist, overlap_thres).float().squeeze(1)  # (N, )
 
     M, K = ref_knn_point_ids.shape
     N, _ = src_knn_point_ids.shape
@@ -595,9 +622,9 @@ def get_node_correspondences(
     point_mask_mat = torch.logical_and(ref_knn_masks.unsqueeze(2), src_knn_masks.unsqueeze(1))  # (B, K, K)
 
     # compute overlaps
-    dist_mat = square_distance(ref_knn_points, src_knn_points) # (B, K, K)
+    dist_mat = square_distance(ref_knn_points, src_knn_points)  # (B, K, K)
     dist_mat.masked_fill_(~point_mask_mat, 1e12)
-    point_overlap_mat = torch.lt(dist_mat, pos_radius ** 2)  # (B, K, K)
+    point_overlap_mat = torch.lt(dist_mat, pos_radius**2)  # (B, K, K)
     ref_overlap_counts = torch.count_nonzero(point_overlap_mat.sum(-1), dim=-1).float()  # (B,)
     src_overlap_counts = torch.count_nonzero(point_overlap_mat.sum(-2), dim=-1).float()  # (B,)
     ref_overlaps = ref_overlap_counts / ref_knn_masks.sum(-1).float()  # (B,)
@@ -608,7 +635,7 @@ def get_node_correspondences(
     ref_corr_indices = sel_ref_indices[overlap_masks]
     src_corr_indices = sel_src_indices[overlap_masks]
     corr_indices = torch.stack([ref_corr_indices, src_corr_indices], dim=1)
-    #corr_indices = torch.stack([src_corr_indices, ref_corr_indices], dim=1)
+    # corr_indices = torch.stack([src_corr_indices, ref_corr_indices], dim=1)
     corr_overlaps = overlaps[overlap_masks]
 
     return corr_indices, corr_overlaps
@@ -618,44 +645,45 @@ def get_node_correspondences(
 # utils classes
 ########################
 
+
 class AverageMeter(object):
-    '''
+    """
     A class computes and stores the average and current values
-    '''
+    """
 
     def __init__(self):
         self.reset()
 
     def reset(self):
-        self.val = 0.
-        self.avg = 0.
-        self.sum = 0.
-        self.sq_sum = 0.
-        self.count = 0.
+        self.val = 0.0
+        self.avg = 0.0
+        self.sum = 0.0
+        self.sq_sum = 0.0
+        self.count = 0.0
 
     def update(self, val, n=1):
         self.val = val
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
-        self.sq_sum += val ** 2 * n
-        self.var = self.sq_sum / self.count - self.avg ** 2
+        self.sq_sum += val**2 * n
+        self.var = self.sq_sum / self.count - self.avg**2
 
 
 class Timer(object):
-    '''
+    """
     A simple timer
-    '''
+    """
 
     def __init__(self):
         self.reset()
 
     def reset(self):
-        self.total_time = 0.
+        self.total_time = 0.0
         self.calls = 0
-        self.start_time = 0.
-        self.diff = 0.
-        self.avg = 0.
+        self.start_time = 0.0
+        self.diff = 0.0
+        self.avg = 0.0
 
     def tic(self):
         self.start_time = time.time()
@@ -672,13 +700,13 @@ class Timer(object):
 
 
 class Logger(object):
-    '''
+    """
     A simple logger
-    '''
+    """
 
     def __init__(self, path):
         self.path = path
-        self.fw = open(self.path + '/log', 'a')
+        self.fw = open(self.path + "/log", "a")
 
     def write(self, text):
         self.fw.write(text)

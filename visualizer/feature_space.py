@@ -1,9 +1,11 @@
+import copy
+
 import numpy as np
 import open3d as o3d
 import torch
-from sklearn.manifold import TSNE
 from matplotlib import pyplot as plt
-import copy
+from sklearn.manifold import TSNE
+
 from dataset.common import get_square_distance_matrix
 
 
@@ -12,7 +14,7 @@ def get_color_map(x):
     return colours[:, :3]
 
 
-def mesh_sphere(pcd, voxel_size, sphere_size=2.):
+def mesh_sphere(pcd, voxel_size, sphere_size=2.0):
     # Create a mesh sphere
     spheres = o3d.geometry.TriangleMesh()
     s = o3d.geometry.TriangleMesh.create_sphere(radius=voxel_size * sphere_size)
@@ -60,4 +62,4 @@ def visualize_feature_space(src_pcd, src_feats, tgt_pcd, tgt_feats, to_sphere=Tr
     vis_pcd = get_colored_point_cloud_feature(vis_pcd, feats, to_sphere)
 
     o3d.visualization.draw_geometries([vis_pcd])
-    #o3d.io.write_triangle_mesh('./feature_space.ply', vis_pcd)
+    # o3d.io.write_triangle_mesh('./feature_space.ply', vis_pcd)

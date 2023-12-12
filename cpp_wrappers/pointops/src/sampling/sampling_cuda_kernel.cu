@@ -129,7 +129,7 @@ __global__ void furthestsampling_cuda_kernel(const float *xyz, const int *offset
 }
 
 void furthestsampling_cuda_launcher(int b, int n, const float *xyz, const int *offset, const int *new_offset, float *tmp, int *idx)
-{   
+{
 	unsigned int n_threads = opt_n_threads(n);
 	switch (n_threads) {
         case 1024:

@@ -1,29 +1,30 @@
 # Reference: https://github.com/qinzheng93/GeoTransformer
 
+import numpy as np
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
+
 from lib.utils import square_distance
-import numpy as np
 
 
 def get_activation(activation, **kwargs):
-    if activation == 'relu':
+    if activation == "relu":
         return nn.ReLU(inplace=True)
-    elif activation == 'lrelu':
-        if 'negative_slope' in kwargs:
-            negative_slope = kwargs['negative_slope']
+    elif activation == "lrelu":
+        if "negative_slope" in kwargs:
+            negative_slope = kwargs["negative_slope"]
         else:
             negative_slope = 0.01
         return nn.LeakyReLU(negative_slope=negative_slope, inplace=True)
-    elif activation == 'elu':
+    elif activation == "elu":
         return nn.ELU(inplace=True)
-    elif activation == 'sigmoid':
+    elif activation == "sigmoid":
         return nn.Sigmoid()
-    elif activation == 'gelu':
+    elif activation == "gelu":
         return nn.GLU()
     else:
-        raise RuntimeError('Activation function {} is not supported.'.format(activation))
+        raise RuntimeError("Activation function {} is not supported.".format(activation))
 
 
 class MonteCarloDropout(nn.Module):

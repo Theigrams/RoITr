@@ -1,8 +1,8 @@
 # Reference: https://github.com/qinzheng93/GeoTransformer
 
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
 import torch.nn.functional as F
 
 
@@ -27,23 +27,22 @@ def pairwise_distance(
     if normalized:
         sq_distances = 2.0 - 2.0 * xy
     else:
-        x2 = torch.sum(x ** 2, dim=channel_dim).unsqueeze(-1)  # (*, N, C) or (*, C, N) -> (*, N) -> (*, N, 1)
-        y2 = torch.sum(y ** 2, dim=channel_dim).unsqueeze(-2)  # (*, M, C) or (*, C, M) -> (*, M) -> (*, 1, M)
+        x2 = torch.sum(x**2, dim=channel_dim).unsqueeze(-1)  # (*, N, C) or (*, C, N) -> (*, N) -> (*, N, 1)
+        y2 = torch.sum(y**2, dim=channel_dim).unsqueeze(-2)  # (*, M, C) or (*, C, M) -> (*, M) -> (*, 1, M)
         sq_distances = x2 - 2 * xy + y2
     sq_distances = sq_distances.clamp(min=0.0)
     return sq_distances
-
 
 
 class SinusoidalPositionalEmbedding(nn.Module):
     def __init__(self, d_model):
         super(SinusoidalPositionalEmbedding, self).__init__()
         if d_model % 2 != 0:
-            raise ValueError(f'Sinusoidal positional encoding with odd d_model: {d_model}')
+            raise ValueError(f"Sinusoidal positional encoding with odd d_model: {d_model}")
         self.d_model = d_model
         div_indices = torch.arange(0, d_model, 2).float()
         div_term = torch.exp(div_indices * (-np.log(10000.0) / d_model))
-        self.register_buffer('div_term', div_term)
+        self.register_buffer("div_term", div_term)
 
     def forward(self, emb_indices):
         r"""Sinusoidal Positional Embedding.
@@ -63,21 +62,22 @@ class SinusoidalPositionalEmbedding(nn.Module):
 
 
 class PPFStructualEmbedding(nn.Module):
-    def __init__(self, hidden_dim, mode='local'):
+    def __init__(self, hidden_dim, mode="local"):
         super(PPFStructualEmbedding, self).__init__()
-        if mode == 'local':
+        if mode == "local":
             self.embedding = SinusoidalPositionalEmbedding(hidden_dim)
             self.proj = nn.Linear(4, hidden_dim)
-        elif mode == 'global':
+        elif mode == "global":
             self.embedding = SinusoidalPositionalEmbedding(hidden_dim // 4)
             self.proj = nn.Linear(hidden_dim, hidden_dim)
         else:
-            raise 'mode should be in [local, global]'
+            raise "mode should be in [local, global]"
         self.mode = mode
+
     def forward(self, ppf):
-        if self.mode == 'local':
+        if self.mode == "local":
             embeddings = self.proj(ppf)
-        elif self.mode == 'global':
+        elif self.mode == "global":
             d_embeddings = self.embedding(ppf[..., 0])
             a_embeddings0 = self.embedding(ppf[..., 1])
             a_embeddings1 = self.embedding(ppf[..., 2])
@@ -86,13 +86,13 @@ class PPFStructualEmbedding(nn.Module):
             embeddings = self.proj(embeddings)
             embeddings = F.normalize(embeddings, dim=-1, p=2)
         else:
-            raise 'mode should be in [local, global]'
+            raise "mode should be in [local, global]"
 
         return embeddings
 
 
 class GeometricStructureEmbedding(nn.Module):
-    def __init__(self, hidden_dim, sigma_d, sigma_a, angle_k, reduction_a='max'):
+    def __init__(self, hidden_dim, sigma_d, sigma_a, angle_k, reduction_a="max"):
         super(GeometricStructureEmbedding, self).__init__()
         self.sigma_d = sigma_d
         self.sigma_a = sigma_a
@@ -104,8 +104,8 @@ class GeometricStructureEmbedding(nn.Module):
         self.proj_a = nn.Linear(hidden_dim, hidden_dim)
 
         self.reduction_a = reduction_a
-        if self.reduction_a not in ['max', 'mean']:
-            raise ValueError(f'Unsupported reduction mode: {self.reduction_a}.')
+        if self.reduction_a not in ["max", "mean"]:
+            raise ValueError(f"Unsupported reduction mode: {self.reduction_a}.")
 
     @torch.no_grad()
     def get_embedding_indices(self, points):
@@ -144,7 +144,7 @@ class GeometricStructureEmbedding(nn.Module):
 
         a_embeddings = self.embedding(a_indices)
         a_embeddings = self.proj_a(a_embeddings)
-        if self.reduction_a == 'max':
+        if self.reduction_a == "max":
             a_embeddings = a_embeddings.max(dim=3)[0]
         else:
             a_embeddings = a_embeddings.mean(dim=3)

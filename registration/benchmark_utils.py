@@ -1,6 +1,10 @@
-import os, torch, glob
+import glob
+import os
+
 import numpy as np
 import open3d as o3d
+import torch
+
 from lib.utils import to_o3d_pcd
 from registration.benchmark import read_trajectory, write_trajectory
 
@@ -9,8 +13,8 @@ def to_array(tensor):
     """
     Conver tensor to array
     """
-    if(not isinstance(tensor,np.ndarray)):
-        if(tensor.device == torch.device('cpu')):
+    if not isinstance(tensor, np.ndarray):
+        if tensor.device == torch.device("cpu"):
             return tensor.numpy()
         else:
             return tensor.cpu().numpy()
@@ -22,7 +26,7 @@ def to_tensor(array):
     """
     Convert array to tensor
     """
-    if(not isinstance(array,torch.Tensor)):
+    if not isinstance(array, torch.Tensor):
         return torch.from_numpy(array).float()
     else:
         return array
@@ -38,7 +42,6 @@ def to_o3d_feats(embedding):
     return feats
 
 
-
 def mutual_selection(score_mat):
     """
     Return a {0,1} matrix, the element is 1 if and only if it's maximum along both row and column
@@ -49,7 +52,7 @@ def mutual_selection(score_mat):
         mutuals:    [B,N,N]
     """
     score_mat = to_array(score_mat)
-    if (score_mat.ndim == 2):
+    if score_mat.ndim == 2:
         score_mat = score_mat[None, :, :]
 
     mutuals = np.zeros_like(score_mat)
@@ -67,9 +70,9 @@ def mutual_selection(score_mat):
 
 
 def get_inlier_ratio_correspondence(src_node, tgt_node, rot, trans, inlier_distance_threshold=0.1):
-    '''
+    """
     Compute inlier ratios based on input torch tensors
-    '''
+    """
     src_node = torch.matmul(src_node, rot.T) + trans.T
     dist = torch.norm(src_node - tgt_node, dim=-1)
     inliers = dist < inlier_distance_threshold
@@ -87,36 +90,36 @@ def get_inlier_ratio(src_pcd, tgt_pcd, src_feat, tgt_feat, rot, trans, inlier_di
     tgt_feat = to_tensor(tgt_feat)
     rot, trans = to_tensor(rot), to_tensor(trans)
 
-    results =dict()
-    results['w']=dict()
-    results['wo']=dict()
+    results = dict()
+    results["w"] = dict()
+    results["wo"] = dict()
 
-    if(torch.cuda.device_count()>=1):
-        device = torch.device('cuda')
+    if torch.cuda.device_count() >= 1:
+        device = torch.device("cuda")
     else:
-        device = torch.device('cpu')
+        device = torch.device("cpu")
 
-    src_pcd = (torch.matmul(rot, src_pcd.transpose(0,1)) + trans).transpose(0,1)
-    scores = torch.matmul(src_feat.to(device), tgt_feat.transpose(0,1).to(device)).cpu()
+    src_pcd = (torch.matmul(rot, src_pcd.transpose(0, 1)) + trans).transpose(0, 1)
+    scores = torch.matmul(src_feat.to(device), tgt_feat.transpose(0, 1).to(device)).cpu()
 
     ########################################
     # 1. calculate inlier ratios wo mutual check
     _, idx = scores.max(-1)
-    dist = torch.norm(src_pcd- tgt_pcd[idx],dim=1)
-    results['wo']['distance'] = dist.numpy()
+    dist = torch.norm(src_pcd - tgt_pcd[idx], dim=1)
+    results["wo"]["distance"] = dist.numpy()
 
     c_inlier_ratio = (dist < inlier_distance_threshold).float().mean()
-    results['wo']['inlier_ratio'] = c_inlier_ratio
+    results["wo"]["inlier_ratio"] = c_inlier_ratio
 
     ########################################
     # 2. calculate inlier ratios w mutual check
-    selection = mutual_selection(scores[None,:,:])[0]
+    selection = mutual_selection(scores[None, :, :])[0]
     row_sel, col_sel = np.where(selection)
-    dist = torch.norm(src_pcd[row_sel]- tgt_pcd[col_sel],dim=1)
-    results['w']['distance'] = dist.numpy()
+    dist = torch.norm(src_pcd[row_sel] - tgt_pcd[col_sel], dim=1)
+    results["w"]["distance"] = dist.numpy()
 
     c_inlier_ratio = (dist < inlier_distance_threshold).float().mean()
-    results['w']['inlier_ratio'] = c_inlier_ratio
+    results["w"]["inlier_ratio"] = c_inlier_ratio
 
     return results
 
@@ -127,11 +130,11 @@ def ransac_pose_estimation(src_pcd, tgt_pcd, src_feat, tgt_feat, mutual=False, d
     We follow D3Feat to set ransac_n = 3 for 3DMatch and ransac_n = 4 for KITTI.
     For 3DMatch dataset, we observe significant improvement after changing ransac_n from 4 to 3.
     """
-    if (mutual):
-        if (torch.cuda.device_count() >= 1):
-            device = torch.device('cuda')
+    if mutual:
+        if torch.cuda.device_count() >= 1:
+            device = torch.device("cuda")
         else:
-            device = torch.device('cpu')
+            device = torch.device("cpu")
         src_feat, tgt_feat = to_tensor(src_feat), to_tensor(tgt_feat)
         scores = torch.matmul(src_feat.to(device), tgt_feat.transpose(0, 1).to(device)).cpu()
         selection = mutual_selection(scores[None, :, :])[0]
@@ -140,11 +143,14 @@ def ransac_pose_estimation(src_pcd, tgt_pcd, src_feat, tgt_feat, mutual=False, d
         src_pcd = to_o3d_pcd(src_pcd)
         tgt_pcd = to_o3d_pcd(tgt_pcd)
         result_ransac = o3d.registration.registration_ransac_based_on_correspondence(
-            source=src_pcd, target=tgt_pcd, corres=corrs,
+            source=src_pcd,
+            target=tgt_pcd,
+            corres=corrs,
             max_correspondence_distance=distance_threshold,
             estimation_method=o3d.registration.TransformationEstimationPointToPoint(False),
             ransac_n=3,
-            criteria=o3d.registration.RANSACConvergenceCriteria(50000, 1000))
+            criteria=o3d.registration.RANSACConvergenceCriteria(50000, 1000),
+        )
     else:
         src_pcd = to_o3d_pcd(src_pcd)
         tgt_pcd = to_o3d_pcd(tgt_pcd)
@@ -152,19 +158,27 @@ def ransac_pose_estimation(src_pcd, tgt_pcd, src_feat, tgt_feat, mutual=False, d
         tgt_feats = to_o3d_feats(tgt_feat)
 
         result_ransac = o3d.registration.registration_ransac_based_on_feature_matching(
-            src_pcd, tgt_pcd, src_feats, tgt_feats, distance_threshold,
-            o3d.registration.TransformationEstimationPointToPoint(False), ransac_n,
-            [o3d.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
-             o3d.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold)],
-            o3d.registration.RANSACConvergenceCriteria(50000, 1000))
+            src_pcd,
+            tgt_pcd,
+            src_feats,
+            tgt_feats,
+            distance_threshold,
+            o3d.registration.TransformationEstimationPointToPoint(False),
+            ransac_n,
+            [
+                o3d.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
+                o3d.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold),
+            ],
+            o3d.registration.RANSACConvergenceCriteria(50000, 1000),
+        )
 
     return result_ransac.transformation
 
 
-
-def ransac_pose_estimation_correspondences(src_pcd, tgt_pcd, correspondences, mutual=False, distance_threshold=0.05,
-                                           ransac_n=3):
-    '''
+def ransac_pose_estimation_correspondences(
+    src_pcd, tgt_pcd, correspondences, mutual=False, distance_threshold=0.05, ransac_n=3
+):
+    """
     Run RANSAC estimation based on input correspondences
     :param src_pcd:
     :param tgt_pcd:
@@ -173,7 +187,7 @@ def ransac_pose_estimation_correspondences(src_pcd, tgt_pcd, correspondences, mu
     :param distance_threshold:
     :param ransac_n:
     :return:
-    '''
+    """
 
     # ransac_n = correspondences.shape[0]
 
@@ -187,25 +201,27 @@ def ransac_pose_estimation_correspondences(src_pcd, tgt_pcd, correspondences, mu
         tgt_pcd = to_o3d_pcd(to_array(tgt_pcd))
         correspondences = o3d.utility.Vector2iVector(to_array(correspondences))
 
-        result_ransac = o3d.pipelines.registration.registration_ransac_based_on_correspondence(src_pcd, tgt_pcd,
-                                                                                               correspondences,
-                                                                                               distance_threshold,
-                                                                                               o3d.pipelines.registration.TransformationEstimationPointToPoint(
-                                                                                                   False), ransac_n, [
-                                                                                                   o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(
-                                                                                                       0.9),
-                                                                                                   o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(
-                                                                                                       distance_threshold)],
-                                                                                               o3d.pipelines.registration.RANSACConvergenceCriteria(
-                                                                                                   50000, 1000))
-        '''
+        result_ransac = o3d.pipelines.registration.registration_ransac_based_on_correspondence(
+            src_pcd,
+            tgt_pcd,
+            correspondences,
+            distance_threshold,
+            o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
+            ransac_n,
+            [
+                o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
+                o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold),
+            ],
+            o3d.pipelines.registration.RANSACConvergenceCriteria(50000, 1000),
+        )
+        """
         result_ransac = o3d.registration.registration_ransac_based_on_correspondence(
             source=src_pcd, target=tgt_pcd, corres=correspondences,
             max_correspondence_distance=distance_threshold,
             estimation_method=o3d.registration.TransformationEstimationPointToPoint(False),
             ransac_n=3,
             criteria=o3d.registration.RANSACConvergenceCriteria(50000, 1000))
-        '''
+        """
     return result_ransac.transformation
 
 
@@ -213,16 +229,16 @@ def get_scene_split(whichbenchmark):
     """
     Just to check how many valid fragments each scene has
     """
-    assert whichbenchmark in ['3DMatch','3DLoMatch']
-    folder = f'configs/benchmarks/{whichbenchmark}/*/gt.log'
+    assert whichbenchmark in ["3DMatch", "3DLoMatch"]
+    folder = f"configs/benchmarks/{whichbenchmark}/*/gt.log"
 
-    scene_files=sorted(glob.glob(folder))
-    split=[]
-    count=0
+    scene_files = sorted(glob.glob(folder))
+    split = []
+    count = 0
     for eachfile in scene_files:
         gt_pairs, gt_traj = read_trajectory(eachfile)
-        split.append([count,count+len(gt_pairs)])
-        count+=len(gt_pairs)
+        split.append([count, count + len(gt_pairs)])
+        count += len(gt_pairs)
     return split
 
 
@@ -230,18 +246,17 @@ def write_est_trajectory(gt_folder, exp_dir, tsfm_est):
     """
     Write the estimated trajectories
     """
-    scene_names=sorted(os.listdir(gt_folder))
-    count=0
+    scene_names = sorted(os.listdir(gt_folder))
+    count = 0
     for scene_name in scene_names:
-        gt_pairs, gt_traj = read_trajectory(os.path.join(gt_folder,scene_name,'gt.log'))
+        gt_pairs, gt_traj = read_trajectory(os.path.join(gt_folder, scene_name, "gt.log"))
         est_traj = []
         for i in range(len(gt_pairs)):
             est_traj.append(tsfm_est[count])
-            count+=1
+            count += 1
 
         # write the trajectory
-        c_directory=os.path.join(exp_dir,scene_name)
+        c_directory = os.path.join(exp_dir, scene_name)
         if not os.path.exists(c_directory):
             os.makedirs(c_directory)
-        write_trajectory(np.array(est_traj),gt_pairs,os.path.join(c_directory,'est.log'))
-
+        write_trajectory(np.array(est_traj), gt_pairs, os.path.join(c_directory, "est.log"))
